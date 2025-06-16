@@ -13,7 +13,7 @@ symbol = st.text_input("Entrez le symbole de la crypto (ex: BTC-USD)", value="BT
 @st.cache_data
 def load_data(symbol):
     try:
-        df = yf.download(symbol, period="3mo", interval="1d")
+        df = yf.download(symbol, period="1mo", interval="1d")
         return df
     except Exception as e:
         return pd.DataFrame()
