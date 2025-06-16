@@ -1,28 +1,29 @@
 
+# Correction: We will remove the mplfinance import and use matplotlib with candlestick_ohlc from mplfinance.original_flavor
+# This avoids the ModuleNotFoundError on Streamlit Cloud if mplfinance is not installed
+
 import streamlit as st
 import yfinance as yf
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
-import mplfinance as mpf
+import matplotlib.dates as mdates
+from mplfinance.original_flavor import candlestick_ohlc
 
 # Titre de l'application
 st.title("📈 Bot IA de Trading Crypto")
 
 # Saisie de l'utilisateur
-symbol = st.text_input("Entrez le symbole de la crypto (ex: BTC-USD)", "BTC-USD")
+symbol = st.text_input("Entrez le symbole de la crypto (ex: BTC-USD)", value="BTC-USD")
 
-# Choix de la périodicité
-interval = st.selectbox("Choisissez la périodicité des données", ["1d", "1h", "1wk"])
-
-# Choix de la durée
-duration_label = st.selectbox("Choisissez la durée d'analyse", ["1 jour", "1 semaine", "1 mois"])
+# Choix de la durée d'analyse
+duration_label = st.selectbox("Choisissez la durée d'analyse :", ["1 jour", "1 semaine", "1 mois"])
 duration_map = {
-    "1 jour": "1d",
-    "1 semaine": "7d",
-    "1 mois": "30d"
+    "1 jour": ("1d", "1h"),
+    "1 semaine": ("7d", "1h"),
+    "1 mois": ("30d", "1h")
 }
-period = duration_map[duration_label]
+period, interval = duration_map[duration_label]
 
 # Télécharger les données
 df = yf.download(symbol, period=period, interval=interval)
@@ -49,28 +50,33 @@ else:
     df["Signal"] = df["MACD"].ewm(span=9, adjust=False).mean()
 
     # Génération des signaux
-    latest = df.iloc[-1]
-    signals = {}
+    def generate_signals(data):
+        latest = data.iloc[-1]
+        signals = {}
 
-    try:
-        if float(latest["MACD"]) > float(latest["Signal"]) and float(latest["RSI"]) < 70 and float(latest["SMA20"]) > float(latest["SMA50"]):
-            signals["Tendance"] = "📈 Achat"
-            entry_price = float(latest["Close"])
-            signals["Prix d'entrée"] = round(entry_price, 2)
-            signals["Stop Loss"] = round(entry_price * 0.97, 2)
-            signals["Take Profit"] = round(entry_price * 1.05, 2)
-            signals["Prix de sortie estimé"] = round(entry_price * 1.03, 2)
-        elif float(latest["MACD"]) < float(latest["Signal"]) and float(latest["RSI"]) > 30 and float(latest["SMA20"]) < float(latest["SMA50"]):
-            signals["Tendance"] = "📉 Vente"
-            entry_price = float(latest["Close"])
-            signals["Prix d'entrée"] = round(entry_price, 2)
-            signals["Stop Loss"] = round(entry_price * 1.03, 2)
-            signals["Take Profit"] = round(entry_price * 0.95, 2)
-            signals["Prix de sortie estimé"] = round(entry_price * 0.97, 2)
-        else:
-            signals["Tendance"] = "⏸️ Neutre"
-    except Exception as e:
-        st.warning(f"Erreur lors de l'analyse des signaux : {e}")
+        try:
+            if float(latest["MACD"]) > float(latest["Signal"]) and float(latest["RSI"]) < 70 and float(latest["SMA20"]) > float(latest["SMA50"]):
+                signals["Tendance"] = "📈 Achat"
+                entry_price = float(latest["Close"])
+                signals["Prix d'entrée"] = round(entry_price, 2)
+                signals["Stop Loss"] = round(entry_price * 0.97, 2)
+                signals["Take Profit"] = round(entry_price * 1.05, 2)
+                signals["Prix de sortie estimé"] = round(entry_price * 1.03, 2)
+            elif float(latest["MACD"]) < float(latest["Signal"]) and float(latest["RSI"]) > 30 and float(latest["SMA20"]) < float(latest["SMA50"]):
+                signals["Tendance"] = "📉 Vente"
+                entry_price = float(latest["Close"])
+                signals["Prix d'entrée"] = round(entry_price, 2)
+                signals["Stop Loss"] = round(entry_price * 1.03, 2)
+                signals["Take Profit"] = round(entry_price * 0.95, 2)
+                signals["Prix de sortie estimé"] = round(entry_price * 0.97, 2)
+            else:
+                signals["Tendance"] = "🔍 Neutre"
+        except Exception as e:
+            signals["Erreur"] = str(e)
+
+        return signals
+
+    signals = generate_signals(df)
 
     # Affichage des signaux
     st.subheader("📊 Signaux de Trading")
@@ -78,11 +84,19 @@ else:
         st.write(f"**{key}** : {value}")
 
     # Affichage du graphique en chandeliers
-    st.subheader("🕯️ Graphique des prix (bougies)")
-    df_plot = df.copy()
-    df_plot.index.name = 'Date'
-    df_plot = df_plot[["Open", "High", "Low", "Close", "Volume"]]
+    st.subheader("📉 Graphique des prix (bougies)")
 
-    fig, ax = mpf.plot(df_plot, type='candle', style='charles', volume=True, returnfig=True)
+    df_plot = df[["Open", "High", "Low", "Close"]].copy()
+    df_plot.reset_index(inplace=True)
+    df_plot["Date"] = df_plot["Datetime"].map(mdates.date2num)
+
+    ohlc = df_plot[["Date", "Open", "High", "Low", "Close"]]
+
+    fig, ax = plt.subplots()
+    candlestick_ohlc(ax, ohlc.values, width=0.01, colorup='green', colordown='red')
+    ax.xaxis_date()
+    ax.set_title(f"Graphique en chandeliers : {symbol}")
+    ax.set_ylabel("Prix")
+    plt.xticks(rotation=45)
     st.pyplot(fig)
 
