@@ -4,7 +4,7 @@ import numpy as np
 import streamlit as st
 import matplotlib.pyplot as plt
 
-st.title("🤖 Bot IA de Trading Crypto")
+st.title("Bot IA de Trading Crypto")
 
 # Saisie de l'utilisateur
 symbol = st.text_input("Entrez le symbole de la crypto (ex: BTC-USD)", value="BTC-USD")
